@@ -11,3 +11,7 @@ constraint satisfaction heuristics.
 Futoshiki (不等式 futōshiki?), or More or Less, is a logic puzzle game from
 Japan. Its name means "inequality". It is also spelled hutosiki (using
 Kunrei-shiki romanization).
+
+# Perf-eval status
+- cpython: 19:35m
+- pypy3: 1:50m
