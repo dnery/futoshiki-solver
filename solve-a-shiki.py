@@ -1,15 +1,14 @@
 from __future__ import print_function
-from sys import argv
-from sys import exit
-from sys import stdin
-from timeit import timeit
+import timeit
+import sys
 
 # TODO (só pra contextualizar):
-# 1. DONEZO - guardar dados de performance
+# 1. guardar dados de performance -- feito
 # 2. usar inteiros (bit containers) ao invés de listas
 # 3. outras otimizações:
-#   3.1. DONEZO - <list>.append é reavaliado todo laço; isole referência antes
-#   3.2. use `map' onde possível, em listas, ao invés de laços comuns
+#   3.1. <list>.append é reavaliado todo laço; isole referência antes -- feito
+#   3.2. use `map' onde possível, em listas, ao invés de laços comuns -- inviável
+#   3.3. use `filter' para sub-listas de listas, ao invés de laços
 
 
 class Pos:
@@ -57,7 +56,8 @@ def lrv_empty_pos(test):
     pos = None
     for i in range(test.bdim):
         for j in range(test.bdim):  # nesse teste, fazer check se values[i] > 0
-            if test.board[i][j] == 0 and (len(test.values[i][j]) > 0 and len(test.values[i][j]) < max):
+            if test.board[i][j] == 0 and (len(test.values[i][j]) > 0 and
+                                          len(test.values[i][j]) < max):
                 max = len(test.values[i][j])  # max = 2^(bdim)
                 pos = Pos(i, j)
     return pos
@@ -231,26 +231,26 @@ def call_wrapper(func, *args, **kwargs):
 
 
 def main():
-    if len(argv) > 2:
-        stream = open(argv[2], 'r')
+    if len(sys.argv) > 2:
+        stream = open(sys.argv[2], 'r')
     else:
-        stream = stdin
+        stream = sys.stdin
     tests = read_experiment(stream)
 
-    if argv[1] != 'a' and argv[1] != 'b' and argv[1] != 'c':
-        print('Parametro \'', argv[1], '\'nao reconhecido')
-        exit(1)
+    if sys.argv[1] != 'a' and sys.argv[1] != 'b' and sys.argv[1] != 'c':
+        print('Parametro \'', sys.argv[1], '\'nao reconhecido')
+        sys.exit(1)
 
     for i in range(len(tests)):
-        if argv[1] == 'a':
+        if sys.argv[1] == 'a':
             wrapped = call_wrapper(solve_shiki, tests[i])
-            tests[i].exectime = timeit(wrapped)
-        elif argv[1] == 'b':
+            tests[i].exectime = timeit.timeit(wrapped)
+        elif sys.argv[1] == 'b':
             wrapped = call_wrapper(fwd_solve_shiki, tests[i], empty_pos)
-            tests[i].exectime = timeit(wrapped)
-        elif argv[1] == 'c':
+            tests[i].exectime = timeit.timeit(wrapped)
+        elif sys.argv[1] == 'c':
             wrapped = call_wrapper(fwd_solve_shiki, tests[i], lrv_empty_pos)
-            tests[i].exectime = timeit(wrapped)
+            tests[i].exectime = timeit.timeit(wrapped)
 
         if tests[i].branches < 1e6:
             print_shiki(i + 1, tests[i].board)
