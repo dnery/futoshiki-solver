@@ -1,6 +1,7 @@
 from __future__ import print_function
-import timeit
+from timeit import timeit
 import sys
+import csv
 
 # TODO (só pra contextualizar):
 # 1. guardar dados de performance -- feito
@@ -55,10 +56,10 @@ def lrv_empty_pos(test):
     max = 10
     pos = None
     for i in range(test.bdim):
-        for j in range(test.bdim):  # nesse teste, fazer check se values[i] > 0
+        for j in range(test.bdim):
             if test.board[i][j] == 0 and (len(test.values[i][j]) > 0 and
                                           len(test.values[i][j]) < max):
-                max = len(test.values[i][j])  # max = 2^(bdim)
+                max = len(test.values[i][j])
                 pos = Pos(i, j)
     return pos
 
@@ -66,17 +67,15 @@ def lrv_empty_pos(test):
 def valid_pos(test, pos, num):
     # check rows, cols
     for i in range(test.bdim):
-        if test.board[i][pos.y] == num:
-            return False
-        if test.board[pos.x][i] == num:
+        if test.board[i][pos.y] == num or test.board[pos.x][i] == num:
             return False
     # check constraints
     for c in test.constraints[pos.x][pos.y]:
         if test.board[c[1].x][c[1].y] == 0:
             continue
-        elif c[0] is True and test.board[c[1].x][c[1].y] > num:
+        if c[0] is True and test.board[c[1].x][c[1].y] > num:
             return False
-        elif c[0] is False and test.board[c[1].x][c[1].y] < num:
+        if c[0] is False and test.board[c[1].x][c[1].y] < num:
             return False
     return True
 
@@ -236,6 +235,7 @@ def main():
     else:
         stream = sys.stdin
     tests = read_experiment(stream)
+    stream.close()
 
     if sys.argv[1] != 'a' and sys.argv[1] != 'b' and sys.argv[1] != 'c':
         print('Parametro \'', sys.argv[1], '\'nao reconhecido')
@@ -244,22 +244,29 @@ def main():
     for i in range(len(tests)):
         if sys.argv[1] == 'a':
             wrapped = call_wrapper(solve_shiki, tests[i])
-            tests[i].exectime = timeit.timeit(wrapped)
         elif sys.argv[1] == 'b':
             wrapped = call_wrapper(fwd_solve_shiki, tests[i], empty_pos)
-            tests[i].exectime = timeit.timeit(wrapped)
         elif sys.argv[1] == 'c':
             wrapped = call_wrapper(fwd_solve_shiki, tests[i], lrv_empty_pos)
-            tests[i].exectime = timeit.timeit(wrapped)
+
+        if len(sys.argv) > 3 and sys.argv[3] == 'p':
+            tests[i].exectime = timeit(wrapped)
+        else:
+            wrapped()
 
         if tests[i].branches < 1e6:
             print_shiki(i + 1, tests[i].board)
-            print('done in', tests[i].branches, 'branches and',
-                  tests[i].exectime, 'sec\'s\n')
         else:
-            print(str(i + 1) + '\n', 'no solution :', tests[i].branches,
-                  'branches taken,', tests[i].exectime, 'sec\'s elapsed\n')
-    stream.close()
+            print('Numero de atribuicoes excede limite maximo')
+        print('')
+
+    with open(str('shiki_perf_' + sys.argv[1] + '.csv'), 'w') as cf:
+        cw = csv.writer(cf, delimiter=',', quoting=csv.QUOTE_NONE)
+        cw.writerow(['#Test', 'Branches Taken', 'Execution Time'])
+        for i in range(len(tests)):
+            cw.writerow([str(i + 1),
+                         str(tests[i].branches),
+                         str(tests[i].exectime)])
 
 if __name__ == '__main__':
     main()
