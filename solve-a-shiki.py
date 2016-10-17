@@ -1,6 +1,15 @@
 from __future__ import print_function
 from sys import argv
+from sys import exit
 from sys import stdin
+from timeit import timeit
+
+# TODO (só pra contextualizar):
+# 1. DONEZO - guardar dados de performance
+# 2. usar inteiros (bit containers) ao invés de listas
+# 3. outras otimizações:
+#   3.1. DONEZO - <list>.append é reavaliado todo laço; isole referência antes
+#   3.2. use `map' onde possível, em listas, ao invés de laços comuns
 
 
 class Pos:
@@ -17,12 +26,22 @@ class Test:
     values = []
     constraints = []
     branches = 0
+    exectime = 0
 
     def __init__(self, bdim, board, values, constraints):
         self.bdim = bdim
         self.board = board
         self.values = values
         self.constraints = constraints
+
+
+def bit_count(value):
+    count = 0
+    while value > 0:
+        if value & 1 == 1:
+            count += 1
+        value = value >> 1
+    return count
 
 
 def empty_pos(test):
@@ -38,8 +57,7 @@ def lrv_empty_pos(test):
     pos = None
     for i in range(test.bdim):
         for j in range(test.bdim):  # nesse teste, fazer check se values[i] > 0
-            if test.board[i][j] == 0 and (len(test.values[i][j]) > 0 and
-                                          len(test.values[i][j]) < max):
+            if test.board[i][j] == 0 and (len(test.values[i][j]) > 0 and len(test.values[i][j]) < max):
                 max = len(test.values[i][j])  # max = 2^(bdim)
                 pos = Pos(i, j)
     return pos
@@ -67,19 +85,20 @@ def propagate_removal(test, pos, num):
     test.board[pos.x][pos.y] = num
     # clear row, col
     memory = []
+    appendf = memory.append  # append function
     for i in range(test.bdim):
         if num in test.values[i][pos.y]:
             test.values[i][pos.y].remove(num)
-            memory.append((num, Pos(i, pos.y)))
+            appendf((num, Pos(i, pos.y)))
         if num in test.values[pos.x][i]:
             test.values[pos.x][i].remove(num)
-            memory.append((num, Pos(pos.x, i)))
+            appendf((num, Pos(pos.x, i)))
     # satisfy constraints
     for c in test.constraints[pos.x][pos.y]:
         for x in list(test.values[c[1].x][c[1].y]):  # has to be a copy
             if (c[0] is True and x > num) or (c[0] is False and x < num):
                 test.values[c[1].x][c[1].y].remove(x)
-                memory.append((x, Pos(c[1].x, c[1].y)))
+                appendf((x, Pos(c[1].x, c[1].y)))
     return memory
 
 
@@ -104,7 +123,7 @@ def solve_shiki(test):
     if pos is None:
         return True
     # failure by effort
-    if test.branches > 1000000:
+    if test.branches > 1e6:
         return False
     # all possible values overall
     for num in range(1, test.bdim + 1):
@@ -114,18 +133,19 @@ def solve_shiki(test):
 
             if solve_shiki(test):
                 return True
+
             test.board[pos.x][pos.y] = 0
     # failure by exhaustion
     return False
 
 
-def fwd_solve_shiki(test):
-    pos = lrv_empty_pos(test)
+def fwd_solve_shiki(test, scan_function):
+    pos = scan_function(test)
     # success
     if pos is None:
         return True
     # failure by effort
-    if test.branches > 1000000:
+    if test.branches > 1e6:
         return False
     # all possible values for this position
     for num in list(test.values[pos.x][pos.y]):
@@ -134,7 +154,7 @@ def fwd_solve_shiki(test):
         test.branches += 1
         # do forward check pass
         if not no_more_values(test, pos):
-            if fwd_solve_shiki(test):
+            if fwd_solve_shiki(test, scan_function):
                 return True
 
         # reinsert value in board
@@ -143,33 +163,32 @@ def fwd_solve_shiki(test):
     return False
 
 
-def print_shiki(board):
+def print_shiki(it, board):
+    print(it)
     for row in board:
-        print(row)
+        print(*row)
 
 
-def non_empty_lines(stream):
-    lines = stream.readlines()
-    for line in list(lines):
-        if line.strip() == '':
-            lines.remove(line)
-    return iter(lines)
+def next_valid(stream):
+    line = next(stream)
+    while line.strip() == '':
+        line = next(stream)
+    return line
 
 
 def read_experiment(stream):
-    lines = non_empty_lines(stream)
-    next(lines)  # skip test count
-
+    ntests = int(next_valid(stream))
+    # read ntests
     tests = []
-    for line in lines:
+    for i in range(ntests):
         # read dimensions
-        line = line.split()
+        line = next_valid(stream).split()
         bdim, cdim = int(line[0]), int(line[1])
 
         # read game board
         board = []
         for i in range(bdim):
-            line = next(lines).split()
+            line = next_valid(stream).split()
             board.append([int(x) for x in line])
 
         # generate constraint array
@@ -181,7 +200,7 @@ def read_experiment(stream):
 
         # populate constraint array
         for i in range(cdim):
-            line = next(lines).split()
+            line = next_valid(stream).split()
             bign = Pos(int(line[2]) - 1, int(line[3]) - 1)
             smln = Pos(int(line[0]) - 1, int(line[1]) - 1)
             constraints[bign.x][bign.y].append((True, smln))
@@ -205,23 +224,42 @@ def read_experiment(stream):
     return tests
 
 
+def call_wrapper(func, *args, **kwargs):
+    def wrapped_call():
+        return func(*args, **kwargs)
+    return wrapped_call
+
+
 def main():
-    if len(argv) > 1:
-        stream = open(argv[1], 'r')
+    if len(argv) > 2:
+        stream = open(argv[2], 'r')
     else:
         stream = stdin
     tests = read_experiment(stream)
 
-    for i in range(len(tests)):
-        # status = solve_shiki(test)
-        status = fwd_solve_shiki(tests[i])
+    if argv[1] != 'a' and argv[1] != 'b' and argv[1] != 'c':
+        print('Parametro \'', argv[1], '\'nao reconhecido')
+        exit(1)
 
-        if status:
-            print(i + 1, ':')
-            print_shiki(tests[i].board)
-            print('done in', tests[i].branches, 'branches')
+    for i in range(len(tests)):
+        if argv[1] == 'a':
+            wrapped = call_wrapper(solve_shiki, tests[i])
+            tests[i].exectime = timeit(wrapped)
+        elif argv[1] == 'b':
+            wrapped = call_wrapper(fwd_solve_shiki, tests[i], empty_pos)
+            tests[i].exectime = timeit(wrapped)
+        elif argv[1] == 'c':
+            wrapped = call_wrapper(fwd_solve_shiki, tests[i], lrv_empty_pos)
+            tests[i].exectime = timeit(wrapped)
+
+        if tests[i].branches < 1e6:
+            print_shiki(i + 1, tests[i].board)
+            print('done in', tests[i].branches, 'branches and',
+                  tests[i].exectime, 'sec\'s\n')
         else:
-            print(i + 1, ': no solution :', tests[i].branches, 'branches taken')
+            print(str(i + 1) + '\n', 'no solution :', tests[i].branches,
+                  'branches taken,', tests[i].exectime, 'sec\'s elapsed\n')
+    stream.close()
 
 if __name__ == '__main__':
     main()
