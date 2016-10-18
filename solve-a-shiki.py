@@ -1,7 +1,7 @@
 from __future__ import print_function
 from timeit import timeit
 import sys
-import csv
+# import csv
 
 # TODO (só pra contextualizar):
 # 1. guardar dados de performance -- feito
@@ -260,13 +260,39 @@ def main():
             print('Numero de atribuicoes excede limite maximo')
         print('')
 
-    with open(str('shiki_perf_' + sys.argv[1] + '.csv'), 'w') as cf:
-        cw = csv.writer(cf, delimiter=',', quoting=csv.QUOTE_NONE)
-        cw.writerow(['#Test', 'Branches Taken', 'Execution Time'])
-        for i in range(len(tests)):
-            cw.writerow([str(i + 1),
-                         str(tests[i].branches),
-                         str(tests[i].exectime)])
+    if len(sys.argv) > 3 and sys.argv[3] == 'p':
+        # generate graphs
+        import plotly as py
+        import plotly.graph_objs as go
+
+        trace1 = go.Scatter(
+            x=[i + 1 for i in range(len(tests))],
+            y=[b.branches for b in tests],
+            name='Branches Taken',
+            fill='tozeroy'
+        )
+        trace2 = go.Scatter(
+            x=[i + 1 for i in range(len(tests))],
+            y=[e.exectime * 1e2 for e in tests],
+            name='Execution Time (10²)',
+            fill='tonexty'
+        )
+        trace3 = go.Scatter(
+            x=[i + 1 for i in range(len(tests))],
+            y=[len(s.board) ** 2 for s in tests],
+            name='Board Size',
+            fill='tonexty'
+        )
+        layout = go.Layout(
+            title='Per-case Profiling',
+            font=dict(family='Consolas, monospace', size=18, color='#7f7f7f')
+        )
+        data = [trace1]
+        fig = go.Figure(data=data, layout=layout)
+        py.offline.plot(fig, filename=str('shiki_perf_' + sys.argv[1] + '1'))
+        data = [trace2, trace3]
+        fig = go.Figure(data=data, layout=layout)
+        py.offline.plot(fig, filename=str('shiki_perf_' + sys.argv[1] + '2'))
 
 if __name__ == '__main__':
     main()
